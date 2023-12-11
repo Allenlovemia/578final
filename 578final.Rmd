@@ -12,6 +12,8 @@ library(gridExtra)
 library(rstan)
 library(bayesplot)
 library(rstanarm)
+library(shinystan)
+library(loo)
 ```
 
 ```{r echo=FALSE}
@@ -175,7 +177,177 @@ par(mfrow = c(1, 1))
 
 ```
 
-Overall, based on these two diagnostic plots, the model seems to be performing adequately. The residuals do not show any clear patterns, and the ACF plot suggests there is no significant autocorrelation.
+The model appears to have no systematic bias or autocorrelation in the residuals, which is good. However, the presence of outliers could be a concern, indicating potential areas where the model's predictions are inaccurate. This might be due to extreme values, anomalies, or leverage points that the model has not handled well.
+
+## 2.2 Hierarchical model based on gender
+
+```{r echo=FALSE,results='hide'}
+data$gender_idx <- as.numeric(factor(data$Gender))
+
+data_list_hierarchical <- list(
+  N = nrow(data),
+  y = data$Calories,
+  X = as.matrix(data[, c("Duration", "Heart_Rate", "Body_Temp")]),
+  K = 3,
+  J = length(unique(data$gender_idx)), 
+  gender = data$gender_idx
+)
+
+# Define the Stan model code for the hierarchical model
+stan_model_code_hierarchical_2 <- "
+data {
+  int<lower=0> N;  // number of observations
+  int<lower=0> K;  // number of predictors
+  int<lower=1> J;  // number of groups (e.g., gender)
+  int<lower=1, upper=J> gender[N]; // array to map each observation to a group
+  vector[N] y;     // response variable
+  matrix[N, K] X;  // predictor matrix
+}
+parameters {
+  vector[K] beta[J];  // array of coefficients for predictors, for each gender group
+  real<lower=0> sigma;  // standard deviation
+  real<lower=0> sigma_beta; // standard deviation for the distribution of beta across groups
+  vector[K] mu_beta;  // mean value of beta coefficients across groups
+}
+model {
+  // Priors
+  mu_beta ~ student_t(3, 0, 10); // Student-t priors for mean beta coefficients
+  sigma_beta ~ exponential(1); // Exponential prior for beta standard deviation
+  
+  for (j in 1:J) {
+    beta[j] ~ student_t(3, mu_beta, sigma_beta); // Hierarchical Student-t prior for beta
+  }
+
+  sigma ~ exponential(1); // Exponential prior for sigma
+
+  // Likelihood
+  for (i in 1:N) {
+    y[i] ~ student_t(4, X[i] * beta[gender[i]], sigma); // Student-t likelihood
+  }
+}
+"
+
+# Fit the hierarchical model
+fit_hierarchical_2 <- stan(
+  model_code = stan_model_code_hierarchical_2, 
+  data = data_list_hierarchical, 
+  iter = 2000, 
+  chains = 4
+)
+
+# Print the summary of the hierarchical model fit
+print(summary(fit_hierarchical_2))
+```
+
+### 2.2.1 method
+
+In summary, this model is a Bayesian hierarchical model designed to handle layered data. The statistical inference for this model, including Markov Chain Monte Carlo (MCMC) sampling and posterior analysis, is implemented through Stan. This approach allows for sophisticated statistical inference, accommodating the complexity inherent in hierarchical data structures.
+
+### 2.2.2 statistical analysis
+
+#### 2.2.2.1 estimators
+
+The estimates include Beta Coefficients (beta[J]),Standard Deviation of Residuals (sigma),standard Deviation of Beta Coefficients Across Groups (sigma_beta),Mean Value of Beta Coefficients Across Groups (mu_beta).
+
+#### 2.2.2.2 prior
+
+1.  Mean value of beta coefficients across groups (`mu_beta`):
+
+    $\mu_{\beta} \sim \text{t}(\text{degrees of freedom} = 3, \text{mean} = 0, \text{scale} = 10)$
+
+2.  Standard deviation for the distribution of beta across groups (`sigma_beta`):
+
+    $\sigma_{\beta} \sim \text{Exponential}(\text{rate} = 1)$
+
+3.  Coefficients for predictors, for each gender group (`beta[j]`):
+
+    $\beta_{j} \sim \text{t}(\text{degrees of freedom} = 3, \mu_{\beta}, \sigma_{\beta})$
+
+4.  Standard deviation of the residuals (`sigma`):
+
+    $\sigma \sim \text{Exponential}(\text{rate} = 1)$
+
+#### 2.2.2.3 loss function
+
+$$
+\mathcal{L}(\boldsymbol{\beta}, \sigma) = -\sum_{i=1}^{N} \log \left( \frac{\Gamma\left(\frac{\nu + 1}{2}\right)}{\Gamma\left(\frac{\nu}{2}\right)\sqrt{\nu\pi}\sigma} \left(1 + \frac{1}{\nu} \left(\frac{y_i - \mathbf{X}_i\boldsymbol{\beta}_{\text{gender}[i]}}{\sigma}\right)^2 \right)^{-\frac{\nu + 1}{2}} \right)
+$$
+
+From this formula,$N$ is the number of observations.$\mathbf{X}_i$ is the vector of predictor values for the $i$-th observation.$\boldsymbol{\beta}_{\text{gender}[i]}$ is the vector of coefficients corresponding to the gender group of the $i$-th observation.$y_i$ is the actual value of the response variable for the $i$-th observation.$\sigma$ is the scale parameter (standard deviation of the residuals).$\nu$ is the degrees of freedom of the Student-t distribution (set to 4 in the model).$\Gamma$ is the gamma function.
+
+#### 2.2.2.4 predictors
+
+The predictors are the variables gender,Duration, Heart Rate, and Body Temperature, which are hypothesized to be associated with the response variable Calories
+
+### 2.2.3 sensitive analysis to the prior
+
+```{r echo=FALSE,results='hide',message=FALSE}
+data$gender_idx <- as.numeric(factor(data$Gender))
+data_list_hierarchical <- list(
+  N = nrow(data),
+  y = data$Calories,
+  X = as.matrix(data[, c("Duration", "Heart_Rate", "Body_Temp")]),
+  K = 3,
+  J = length(unique(data$gender_idx)), 
+  gender = data$gender_idx
+)
+
+# Define the Stan model code for the hierarchical model
+stan_model_code_hierarchical_2 <- "
+data {
+  int<lower=0> N;  // number of observations
+  int<lower=0> K;  // number of predictors
+  int<lower=1> J;  // number of groups (e.g., gender)
+  int<lower=1, upper=J> gender[N]; // array to map each observation to a group
+  vector[N] y;     // response variable
+  matrix[N, K] X;  // predictor matrix
+}
+parameters {
+  vector[K] beta[J];  // array of coefficients for predictors, for each gender group
+  real<lower=0> sigma;  // standard deviation
+  real<lower=0> sigma_beta; // standard deviation for the distribution of beta across groups
+  vector[K] mu_beta;  // mean value of beta coefficients across groups
+}
+model {
+  // Priors
+  mu_beta ~ student_t(3, 0, 10); // Student-t priors for mean beta coefficients
+  sigma_beta ~ exponential(1); // Exponential prior for beta standard deviation
+  
+  for (j in 1:J) {
+    beta[j] ~ student_t(3, mu_beta, sigma_beta); // Hierarchical Student-t prior for beta
+  }
+
+  sigma ~ exponential(1); // Exponential prior for sigma
+
+  // Likelihood
+  for (i in 1:N) {
+    y[i] ~ student_t(4, X[i] * beta[gender[i]], sigma); // Student-t likelihood
+  }
+}
+"
+
+# Fit the hierarchical model
+fit_hierarchical_2 <- stan(
+  model_code = stan_model_code_hierarchical_2, 
+  data = data_list_hierarchical, 
+  iter = 1000, 
+  chains = 2
+)
+
+# Print the summary of the hierarchical model fit
+print(summary(fit_hierarchical_2))
+```
+
+In summary, the model appears to be capturing distinct effects for different gender groups, indicated by the coefficients. However, the relatively large value suggests there is substantial variability not accounted for by the model. It's also important to compare these results with those from a non-hierarchical model to understand the impact of introducing the hierarchical structure.
+
+### 2.2.4 model checking
+
+```{r echo=FALSE}
+posterior_samples <- extract(fit_hierarchical_2)
+stan_trace(fit_hierarchical_2, pars = c("beta", "sigma", "sigma_beta", "mu_beta"))
+```
+
+It seems that the chains for each parameter are mixing reasonably well. There are no apparent trends or drifts in the chains, which is a good sign of convergence.
 
 # 3.result and conclusions
 
@@ -202,3 +374,52 @@ legend("topright", legend = c("Observed", "Predicted"), col = c(rgb(1, 0, 0, 0.5
 #### 3.1.1.1 description
 
 For Overlap of Distributions, the most common values, the model's predictions align well with what is observed.For Shape of Distributions,The similar shapes of the observed and predicted distributions around the peak of the histogram demonstrate that the model is generally successful at capturing the core behavior of the data. However, discrepancies in the tails, especially the right tail, suggest the model may be overestimating the frequency of higher values.For Coverage of Extremes,the model's predictions do not align as closely with the observed data at the extreme low end and the presence of outliers that have not been sufficiently accounted for in the model.For the frequency of Occurrence,Disparities in the frequency of occurrence within certain bins of the histogram, notably where observed frequencies in the lower range exceed predicted frequencies, indicate that the model may not be accurately estimating the likelihood of lower value occurrences.In summary, while the model seems to do a reasonable job of capturing the central tendency of the data, it might not be as accurate in the tails of the distribution.
+
+## 3.2 result of Hierarchical model based on gender
+
+### 3.2.1 point estimate
+
+```{r echo=FALSE,results='hide'}
+
+model_summary <- summary(fit_hierarchical_2)
+print(model_summary)
+```
+
+```{r echo=FALSE,results='hide'}
+sigma_beta_sd <- model_summary$summary["sigma_beta", "sd"]
+sigma_sd <- model_summary$summary["sigma", "sd"]
+mu_beta_sd_1 <- model_summary$summary["mu_beta[1]", "sd"]
+mu_beta_sd_2 <- model_summary$summary["mu_beta[2]", "sd"]
+mu_beta_sd_3 <- model_summary$summary["mu_beta[3]", "sd"]
+
+# Add the standard deviations to your data frame
+means_df$StdDev <- c(mu_beta_sd_1, mu_beta_sd_2, mu_beta_sd_3, sigma_sd, sigma_beta_sd)
+
+
+```
+
+```{r echo=FALSE}
+ggplot(means_df, aes(x = Parameter, y = MeanValue, fill = Parameter)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = MeanValue - StdDev, ymax = MeanValue + StdDev), width = 0.2) +
+  theme_minimal() +
+  labs(title = "Mean Values of Model Parameters with Standard Deviation",
+       x = "Parameter",
+       y = "Mean Value") +
+  scale_fill_brewer(palette = "Pastel1") +
+  geom_text(aes(label = round(MeanValue, 2)), vjust = -0.3)
+```
+
+#### 3.2.1.1 description
+
+In the chart:
+
+The point estimate for mu_beta[1] has a small standard deviation, indicating that the estimate for this parameter is relatively precise. The point estimates for mu_beta[2] and mu_beta[3] have larger standard deviations, especially mu_beta[3], suggesting a higher level of uncertainty in these estimates. The sigma parameter has both a small point estimate and standard deviation, indicating a more stable estimation of the model residuals. The point estimate for sigma_beta has a very large standard deviation, indicating a high level of uncertainty in the estimate of variability in coefficients between groups.
+
+## 3.3 conclusions
+
+In this project, I delved into Bayesian regression analysis and hierarchical modeling, exploring their powerful capabilities in handling uncertainty and applying prior knowledge. Bayesian methods not only allowed me to estimate parameters but also quantified the uncertainty of these estimates within a probabilistic framework, providing valuable information like credible intervals.
+
+Hierarchical modeling enabled a deeper understanding of how parameters vary between different groups, particularly with factors like gender. Key takeaways from this project include the versatility of Bayesian methods, the importance of model validation and checks, and challenges such as model specification, computational complexity, and sensitivity to priors.
+
+This experience has strengthened my understanding of Bayesian inference and statistical modeling, emphasizing the significance of Bayesian methods in handling complex data analysis problems and encouraging their broader application.
