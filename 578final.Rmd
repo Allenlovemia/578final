@@ -21,15 +21,15 @@ data<-read.csv("exercise.csv")
 data$Gender <- ifelse(data$Gender == "male", 0, 1)
 ```
 
-# 1 introduction
+# 1 Introduction
 
-The proposed project aims to establish a predictive relationship between physical exercise attributes and calories output.The reason why I choose this project is that:nowadays,The health industry's standard exercise and nutrition advice doesn't fit everyone's unique body responses. Personalized plans are needed for better health outcomes, which requires understanding how individual traits and exercise reactions affect calorie burning.Besides,The study will analyze two datasets: 'exercise.csv' containing variables such as user demographics and post-exercise vitals, and 'calories.csv' detailing corresponding caloric expenditure.
+The proposed project aims to establish a predictive relationship between physical exercise attributes and calories output.The reason why I choose this project is that:nowadays,the health industry's standard exercise and nutrition advice doesn't fit everyone's unique body responses. Personalized plans are needed for better health outcomes, which requires understanding how individual traits and exercise reactions affect calorie burning.Besides,The study will analyze two datasets: 'exercise.csv' containing variables such as user demographics and post-exercise vitals, and 'calories.csv' detailing corresponding caloric expenditure.
 
-## 1.1 visualization
+## 1.1 Visualization
 
-For this part,I will show some visualization of the data.
+For this part, I will show some visualizations of the data.
 
-```{r echo=FALSE,message=FALSE}
+```{r echo=FALSE, message=FALSE}
 plot1 <- ggplot(data, aes(x = as.factor(Gender), y = Calories)) +
          geom_boxplot() +
          scale_x_discrete(labels = c("0" = "Male", "1" = "Female")) +
@@ -58,9 +58,9 @@ grid.arrange(plot1, plot2, plot3, plot4, ncol = 2, nrow = 2)
 
 ## 2.1 Bayesian linear regression model
 
-### 2.1.1 method
+### 2.1.1 Method
 
-The approximation method used for inference is Bayesian inference through Markov Chain Monte Carlo (MCMC) sampling, specifically employing the No-U-Turn Sampler (NUTS), which is an extension of Hamiltonian Monte Carlo (HMC).
+Inference was conducted using Bayesian inference via Markov Chain Monte Carlo (MCMC) sampling, utilizing the No-U-Turn Sampler (NUTS).
 
 ```{r model-fitting, results='hide', message=FALSE, warning=FALSE, echo=FALSE}
 
@@ -91,17 +91,17 @@ model {
 "
 
 
-fit <- stan(model_code = stan_model_code, data = data_list, iter = 2000, chains = 4)
+fit <- stan(model_code = stan_model_code, data = data_list, iter = 1000, chains = 2)
 print(summary(fit))
 ```
 
-### 2.1.2 statistical analysis
+### 2.1.2 Statistical analysis
 
-#### 2.1.2.1 estimators
+#### 2.1.2.1 Estimators
 
 The model uses Bayesian estimation, which means the estimators are the posterior distributions of the parameters beta and sigma.
 
-#### 2.1.2.2 prior
+#### 2.1.2.2 Prior
 
 The prior for $\beta$ is a normal distribution with mean 0 and standard deviation 10: $$
 \beta \sim \mathcal{N}(0, 10)
@@ -111,7 +111,7 @@ The prior for $\sigma$, the standard deviation of the normal distribution for th
 \sigma \sim \text{Inv-Gamma}(0.01, 0.01)
 $$
 
-#### 2.1.2.3 loss function
+#### 2.1.2.3 Loss function
 
 The loss function in the context of the Bayesian regression model is the negative log-likelihood of the data given the parameters.
 
@@ -121,13 +121,13 @@ $$
 
 In this formula,$L$ is the loss function.$\beta$ is the vector of regression coefficients.$\sigma$ is the standard deviation of the normal distribution. $y_i$ is the observed value of the response variable for the $i$-th observation.$X_i$ is the vector of predictor values for the $i$-th observation.$N$ is the total number of observations.
 
-#### 2.1.2.4 predictors
+#### 2.1.2.4 Predictors
 
 The predictors are the variables Duration, Heart Rate, and Body Temperature, which are hypothesized to be associated with the response variable Calories.
 
-### 2.1.3 sensitive analysis to the prior
+### 2.1.3 Sensitive analysis to the prior
 
-```{r echo=FALSE,results='hide'}
+```{r echo=FALSE,results='hide',warning=FALSE}
 # Adjusted Stan model with different priors
 stan_model_code_sensitivity <- "
 data {
@@ -148,18 +148,18 @@ model {
 "
 
 # Rerun the model with the new priors
-fit_sensitivity <- stan(model_code = stan_model_code_sensitivity, data = data_list, iter = 2000, chains = 4)
+fit_sensitivity <- stan(model_code = stan_model_code_sensitivity, data = data_list, iter = 1000, chains = 2)
 
 # Summary of the model with new priors
 print(summary(fit_sensitivity))
 
 ```
 
-According to 95% credible intervals, it shows a credible effect of the predictors on the calories burned and a precise estimate of the standard deviation of the residuals. According to the standard errors associated with these mean estimates are relatively small, which implies that the parameter estimates are precise. According to the convergence diagnostics,the model has converged well. In summary, the model appears to be well-specified and the results are reliable.
+The 95% credible intervals suggest a credible impact of predictors on calories burned and precise estimates of residual standard deviation. Small standard errors indicate high precision in parameter estimates. Convergence diagnostics confirm good model convergence, indicating overall reliability and well-specification of the model.
 
-### 2.1.4 model checking
+### 2.1.4 Model checking
 
-```{r echo=FALSE,warning=FALSE}
+```{r echo=FALSE, message=FALSE, fig.height=4, fig.width=8,warning=FALSE}
 
 posterior <- extract(fit)
 
@@ -177,7 +177,8 @@ par(mfrow = c(1, 1))
 
 ```
 
-The model appears to have no systematic bias or autocorrelation in the residuals, which is good. However, the presence of outliers could be a concern, indicating potential areas where the model's predictions are inaccurate. This might be due to extreme values, anomalies, or leverage points that the model has not handled well.
+
+The model is free of bias and autocorrelation in residuals but has outliers, indicating some prediction inaccuracies possibly due to extreme values or anomalies.
 
 ## 2.2 Hierarchical model based on gender
 
@@ -231,43 +232,35 @@ model {
 fit_hierarchical_2 <- stan(
   model_code = stan_model_code_hierarchical_2, 
   data = data_list_hierarchical, 
-  iter = 2000, 
-  chains = 4
+  iter = 1000, 
+  chains = 2
 )
 
 # Print the summary of the hierarchical model fit
 print(summary(fit_hierarchical_2))
 ```
 
-### 2.2.1 method
+### 2.2.1 Method
 
-In summary, this model is a Bayesian hierarchical model designed to handle layered data. The statistical inference for this model, including Markov Chain Monte Carlo (MCMC) sampling and posterior analysis, is implemented through Stan. This approach allows for sophisticated statistical inference, accommodating the complexity inherent in hierarchical data structures.
+This is a Bayesian hierarchical model for layered data analysis, using Markov Chain Monte Carlo (MCMC) sampling and posterior analysis via Stan, accommodating complex hierarchical data structures.
 
-### 2.2.2 statistical analysis
+### 2.2.2 Statistical analysis
 
-#### 2.2.2.1 estimators
+#### 2.2.2.1 Estimators
 
 The estimates include Beta Coefficients (beta[J]),Standard Deviation of Residuals (sigma),standard Deviation of Beta Coefficients Across Groups (sigma_beta),Mean Value of Beta Coefficients Across Groups (mu_beta).
 
-#### 2.2.2.2 prior
+#### 2.2.2.2 Prior
 
-1.  Mean value of beta coefficients across groups (`mu_beta`):
+1.  Mean value of beta coefficients across groups (`mu_beta`):$\mu_{\beta} \sim \text{t}(\text{degrees of freedom} = 3, \text{mean} = 0, \text{scale} = 10)$
 
-    $\mu_{\beta} \sim \text{t}(\text{degrees of freedom} = 3, \text{mean} = 0, \text{scale} = 10)$
+2.  Standard deviation for the distribution of beta across groups (`sigma_beta`):$\sigma_{\beta} \sim \text{Exponential}(\text{rate} = 1)$
 
-2.  Standard deviation for the distribution of beta across groups (`sigma_beta`):
+3.  Coefficients for predictors, for each gender group (`beta[j]`):$\beta_{j} \sim \text{t}(\text{degrees of freedom} = 3, \mu_{\beta}, \sigma_{\beta})$
 
-    $\sigma_{\beta} \sim \text{Exponential}(\text{rate} = 1)$
+4.  Standard deviation of the residuals (`sigma`):$\sigma \sim \text{Exponential}(\text{rate} = 1)$
 
-3.  Coefficients for predictors, for each gender group (`beta[j]`):
-
-    $\beta_{j} \sim \text{t}(\text{degrees of freedom} = 3, \mu_{\beta}, \sigma_{\beta})$
-
-4.  Standard deviation of the residuals (`sigma`):
-
-    $\sigma \sim \text{Exponential}(\text{rate} = 1)$
-
-#### 2.2.2.3 loss function
+#### 2.2.2.3 Loss function
 
 $$
 \mathcal{L}(\boldsymbol{\beta}, \sigma) = -\sum_{i=1}^{N} \log \left( \frac{\Gamma\left(\frac{\nu + 1}{2}\right)}{\Gamma\left(\frac{\nu}{2}\right)\sqrt{\nu\pi}\sigma} \left(1 + \frac{1}{\nu} \left(\frac{y_i - \mathbf{X}_i\boldsymbol{\beta}_{\text{gender}[i]}}{\sigma}\right)^2 \right)^{-\frac{\nu + 1}{2}} \right)
@@ -275,11 +268,11 @@ $$
 
 From this formula,$N$ is the number of observations.$\mathbf{X}_i$ is the vector of predictor values for the $i$-th observation.$\boldsymbol{\beta}_{\text{gender}[i]}$ is the vector of coefficients corresponding to the gender group of the $i$-th observation.$y_i$ is the actual value of the response variable for the $i$-th observation.$\sigma$ is the scale parameter (standard deviation of the residuals).$\nu$ is the degrees of freedom of the Student-t distribution (set to 4 in the model).$\Gamma$ is the gamma function.
 
-#### 2.2.2.4 predictors
+#### 2.2.2.4 Predictors
 
-The predictors are the variables gender,Duration, Heart Rate, and Body Temperature, which are hypothesized to be associated with the response variable Calories
+The predictors are the variables gender, Duration, Heart Rate, and Body Temperature, which are hypothesized to be associated with the response variable Calories
 
-### 2.2.3 sensitive analysis to the prior
+### 2.2.3 Sensitive analysis to the prior
 
 ```{r echo=FALSE,results='hide',message=FALSE}
 data$gender_idx <- as.numeric(factor(data$Gender))
@@ -340,22 +333,20 @@ print(summary(fit_hierarchical_2))
 
 In summary, the model appears to be capturing distinct effects for different gender groups, indicated by the coefficients. However, the relatively large value suggests there is substantial variability not accounted for by the model. It's also important to compare these results with those from a non-hierarchical model to understand the impact of introducing the hierarchical structure.
 
-### 2.2.4 model checking
+### 2.2.4 Model checking
 
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, fig.height=4, fig.width=8}
 posterior_samples <- extract(fit_hierarchical_2)
 stan_trace(fit_hierarchical_2, pars = c("beta", "sigma", "sigma_beta", "mu_beta"))
 ```
 
 It seems that the chains for each parameter are mixing reasonably well. There are no apparent trends or drifts in the chains, which is a good sign of convergence.
 
-# 3.result and conclusions
+# 3.Results and Conclusions
 
-## 3.1 result of Bayesian linear regression model
+## 3.1 Result of Bayesian linear regression model(Posterior predictive checks)
 
-### 3.1.1 posterior predictive checks
-
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, fig.height=3, fig.width=6}
 posterior_samples <- extract(fit)
 predicted_y <- matrix(NA, nrow = length(posterior_samples$sigma), ncol = data_list$N)
 for (i in 1:length(posterior_samples$sigma)) {
@@ -371,13 +362,9 @@ legend("topright", legend = c("Observed", "Predicted"), col = c(rgb(1, 0, 0, 0.5
 
 ```
 
-#### 3.1.1.1 description
+The model aligns well with observed data for common values and captures the central tendency effectively, as shown by the overlap of distributions and the shape around the histogram's peak. However, there are discrepancies in the tails, particularly the right tail, indicating a possible overestimation of higher values. The model also struggles with extremes and outliers, particularly at the lower end, and may not accurately estimate the likelihood of lower value occurrences. Overall, while the model is generally successful at capturing core data behavior, its accuracy diminishes at the distribution's extremes.
 
-For Overlap of Distributions, the most common values, the model's predictions align well with what is observed.For Shape of Distributions,The similar shapes of the observed and predicted distributions around the peak of the histogram demonstrate that the model is generally successful at capturing the core behavior of the data. However, discrepancies in the tails, especially the right tail, suggest the model may be overestimating the frequency of higher values.For Coverage of Extremes,the model's predictions do not align as closely with the observed data at the extreme low end and the presence of outliers that have not been sufficiently accounted for in the model.For the frequency of Occurrence,Disparities in the frequency of occurrence within certain bins of the histogram, notably where observed frequencies in the lower range exceed predicted frequencies, indicate that the model may not be accurately estimating the likelihood of lower value occurrences.In summary, while the model seems to do a reasonable job of capturing the central tendency of the data, it might not be as accurate in the tails of the distribution.
-
-## 3.2 result of Hierarchical model based on gender
-
-### 3.2.1 point estimate
+## 3.2 Result of Hierarchical model based on gender(Point estimate)
 
 ```{r echo=FALSE,results='hide'}
 
@@ -386,19 +373,31 @@ print(model_summary)
 ```
 
 ```{r echo=FALSE,results='hide'}
+mu_beta_mean_1 <- model_summary$summary["mu_beta[1]", "mean"]
+mu_beta_mean_2 <- model_summary$summary["mu_beta[2]", "mean"]
+mu_beta_mean_3 <- model_summary$summary["mu_beta[3]", "mean"]
+sigma_mean <- model_summary$summary["sigma", "mean"]
+sigma_beta_mean <- model_summary$summary["sigma_beta", "mean"]
+
+# Create a data frame with these mean values
+means_df <- data.frame(
+  Parameter = c("mu_beta[1]", "mu_beta[2]", "mu_beta[3]", "sigma", "sigma_beta"),
+  MeanValue = c(mu_beta_mean_1, mu_beta_mean_2, mu_beta_mean_3, sigma_mean, sigma_beta_mean)
+)
+
+# Now add the standard deviations as you have done in your script
 sigma_beta_sd <- model_summary$summary["sigma_beta", "sd"]
 sigma_sd <- model_summary$summary["sigma", "sd"]
 mu_beta_sd_1 <- model_summary$summary["mu_beta[1]", "sd"]
 mu_beta_sd_2 <- model_summary$summary["mu_beta[2]", "sd"]
 mu_beta_sd_3 <- model_summary$summary["mu_beta[3]", "sd"]
 
-# Add the standard deviations to your data frame
 means_df$StdDev <- c(mu_beta_sd_1, mu_beta_sd_2, mu_beta_sd_3, sigma_sd, sigma_beta_sd)
 
 
 ```
 
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, fig.height=2, fig.width=8}
 ggplot(means_df, aes(x = Parameter, y = MeanValue, fill = Parameter)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = MeanValue - StdDev, ymax = MeanValue + StdDev), width = 0.2) +
@@ -410,16 +409,14 @@ ggplot(means_df, aes(x = Parameter, y = MeanValue, fill = Parameter)) +
   geom_text(aes(label = round(MeanValue, 2)), vjust = -0.3)
 ```
 
-#### 3.2.1.1 description
+The point estimate for mu_beta[1] is precise, evidenced by its small standard deviation. However, mu_beta[2] and especially mu_beta[3] show larger standard deviations, reflecting greater uncertainty in these estimates. The sigma parameter's small point estimate and standard deviation suggest a stable estimation of model residuals. Conversely, the large standard deviation of sigma_beta's point estimate indicates significant uncertainty in estimating group coefficient variability.
 
-In the chart:
+## 3.3 Conclusions
 
-The point estimate for mu_beta[1] has a small standard deviation, indicating that the estimate for this parameter is relatively precise. The point estimates for mu_beta[2] and mu_beta[3] have larger standard deviations, especially mu_beta[3], suggesting a higher level of uncertainty in these estimates. The sigma parameter has both a small point estimate and standard deviation, indicating a more stable estimation of the model residuals. The point estimate for sigma_beta has a very large standard deviation, indicating a high level of uncertainty in the estimate of variability in coefficients between groups.
+In this project, I examined Bayesian regression and hierarchical modeling, emphasizing their efficacy in uncertainty management and prior knowledge integration. These approaches were instrumental in parameter estimation and uncertainty analysis, especially for group variations like gender.This work enhanced my understanding of Bayesian inference, underscoring its relevance in complex data analysis.
 
-## 3.3 conclusions
 
-In this project, I delved into Bayesian regression analysis and hierarchical modeling, exploring their powerful capabilities in handling uncertainty and applying prior knowledge. Bayesian methods not only allowed me to estimate parameters but also quantified the uncertainty of these estimates within a probabilistic framework, providing valuable information like credible intervals.
 
-Hierarchical modeling enabled a deeper understanding of how parameters vary between different groups, particularly with factors like gender. Key takeaways from this project include the versatility of Bayesian methods, the importance of model validation and checks, and challenges such as model specification, computational complexity, and sensitivity to priors.
 
-This experience has strengthened my understanding of Bayesian inference and statistical modeling, emphasizing the significance of Bayesian methods in handling complex data analysis problems and encouraging their broader application.
+
+
