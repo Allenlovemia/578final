@@ -11,6 +11,7 @@ library(ggplot2)
 library(gridExtra)
 library(rstan)
 library(bayesplot)
+library(rstanarm)
 ```
 
 ```{r echo=FALSE}
@@ -65,7 +66,7 @@ data_list <- list(
   N = nrow(data),
   y = data$Calories,
   X = as.matrix(data[, c("Duration", "Heart_Rate", "Body_Temp")]),
-  K = 3  # Number of predictors
+  K = 3  
 )
 
 
@@ -116,14 +117,88 @@ $$
 L(\beta, \sigma) = \sum_{i=1}^{N} \frac{1}{2\sigma^2} (y_i - X_i \beta)^2 + \frac{N}{2} \log(2\pi\sigma^2)
 $$
 
-In this formula,$L$ is the loss function.$\beta$ is the vector of regression coefficients.$\sigma$ is the standard deviation of the normal distribution.
-$y_i$ is the observed value of the response variable for the $i$-th observation.$X_i$ is the vector of predictor values for the $i$-th observation.$N$ is the total number of observations.
+In this formula,$L$ is the loss function.$\beta$ is the vector of regression coefficients.$\sigma$ is the standard deviation of the normal distribution. $y_i$ is the observed value of the response variable for the $i$-th observation.$X_i$ is the vector of predictor values for the $i$-th observation.$N$ is the total number of observations.
 
 #### 2.1.2.4 predictors
 
 The predictors are the variables Duration, Heart Rate, and Body Temperature, which are hypothesized to be associated with the response variable Calories.
 
-### 2.1.3 sensitive analysis
+### 2.1.3 sensitive analysis to the prior
 
+```{r echo=FALSE,results='hide'}
+# Adjusted Stan model with different priors
+stan_model_code_sensitivity <- "
+data {
+  int<lower=0> N;  // number of observations
+  int<lower=0> K;  // number of predictors
+  vector[N] y;     // response variable
+  matrix[N, K] X;  // predictor matrix
+}
+parameters {
+  vector[K] beta;  // coefficients for predictors
+  real<lower=0> sigma;  // standard deviation
+}
+model {
+  y ~ normal(X * beta, sigma);
+  beta ~ normal(0, 1);  // Tighter prior for beta
+  sigma ~ inv_gamma(0.1, 0.1);  // Different parameters for sigma
+}
+"
+
+# Rerun the model with the new priors
+fit_sensitivity <- stan(model_code = stan_model_code_sensitivity, data = data_list, iter = 2000, chains = 4)
+
+# Summary of the model with new priors
+print(summary(fit_sensitivity))
+
+```
+
+According to 95% credible intervals, it shows a credible effect of the predictors on the calories burned and a precise estimate of the standard deviation of the residuals. According to the standard errors associated with these mean estimates are relatively small, which implies that the parameter estimates are precise. According to the convergence diagnostics,the model has converged well. In summary, the model appears to be well-specified and the results are reliable.
+
+### 2.1.4 model checking
+
+```{r echo=FALSE,warning=FALSE}
+
+posterior <- extract(fit)
+
+predicted_y <- apply(posterior$beta, 1, function(beta) data_list$X %*% beta)
+mean_predicted_y <- apply(predicted_y, 2, mean)
+
+residuals <- data_list$y - mean_predicted_y
+
+par(mfrow = c(1, 2))
+plot(residuals, main = "Residuals Plot", xlab = "Observation", ylab = "Residuals")
+abline(h = 0, col = "red")
+acf(residuals, main = "ACF of Residuals")
+par(mfrow = c(1, 1))
+
+
+```
+
+Overall, based on these two diagnostic plots, the model seems to be performing adequately. The residuals do not show any clear patterns, and the ACF plot suggests there is no significant autocorrelation.
 
 # 3.result and conclusions
+
+## 3.1 result of Bayesian linear regression model
+
+### 3.1.1 posterior predictive checks
+
+```{r echo=FALSE}
+posterior_samples <- extract(fit)
+predicted_y <- matrix(NA, nrow = length(posterior_samples$sigma), ncol = data_list$N)
+for (i in 1:length(posterior_samples$sigma)) {
+  predicted_y[i, ] <- as.numeric(data_list$X %*% posterior_samples$beta[i, ] + 
+                                 rnorm(data_list$N, 0, posterior_samples$sigma[i]))
+}
+yrep <- apply(predicted_y, 2, mean)
+hist(data_list$y, breaks = 40, col = rgb(1, 0, 0, 0.5), main = "Posterior predictive check",
+     xlab = "Calories", ylab = "Frequency", xlim = range(c(data_list$y, yrep)))
+hist(yrep, breaks = 40, col = rgb(0, 0, 1, 0.5), add = TRUE)
+legend("topright", legend = c("Observed", "Predicted"), col = c(rgb(1, 0, 0, 0.5), rgb(0, 0, 1, 0.5)), 
+       pch = 15)
+
+```
+
+#### 3.1.1.1 description
+
+For Overlap of Distributions, the most common values, the model's predictions align well with what is observed.For Shape of Distributions,The similar shapes of the observed and predicted distributions around the peak of the histogram demonstrate that the model is generally successful at capturing the core behavior of the data. However, discrepancies in the tails, especially the right tail, suggest the model may be overestimating the frequency of higher values.For Coverage of Extremes,the model's predictions do not align as closely with the observed data at the extreme low end and the presence of outliers that have not been sufficiently accounted for in the model.For the frequency of Occurrence,Disparities in the frequency of occurrence within certain bins of the histogram, notably where observed frequencies in the lower range exceed predicted frequencies, indicate that the model may not be accurately estimating the likelihood of lower value occurrences.In summary, while the model seems to do a reasonable job of capturing the central tendency of the data, it might not be as accurate in the tails of the distribution.
