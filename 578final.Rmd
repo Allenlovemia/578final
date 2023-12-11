@@ -182,7 +182,7 @@ The model is free of bias and autocorrelation in residuals but has outliers, ind
 
 ## 2.2 Hierarchical model based on gender
 
-```{r echo=FALSE,results='hide'}
+```{r echo=FALSE,results='hide',warning=FALSE}
 data$gender_idx <- as.numeric(factor(data$Gender))
 
 data_list_hierarchical <- list(
