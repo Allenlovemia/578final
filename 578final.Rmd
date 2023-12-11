@@ -1,0 +1,129 @@
+---
+title: "Bayesian final project"
+author: "Yingmai Chen"
+date: "2023-12-10"
+output: pdf_document
+---
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(rstan)
+library(bayesplot)
+```
+
+```{r echo=FALSE}
+data<-read.csv("exercise.csv")
+data$Gender <- ifelse(data$Gender == "male", 0, 1)
+```
+
+# 1 introduction
+
+The proposed project aims to establish a predictive relationship between physical exercise attributes and calories output.The reason why I choose this project is that:nowadays,The health industry's standard exercise and nutrition advice doesn't fit everyone's unique body responses. Personalized plans are needed for better health outcomes, which requires understanding how individual traits and exercise reactions affect calorie burning.Besides,The study will analyze two datasets: 'exercise.csv' containing variables such as user demographics and post-exercise vitals, and 'calories.csv' detailing corresponding caloric expenditure.
+
+## 1.1 visualization
+
+For this part,I will show some visualization of the data.
+
+```{r echo=FALSE,message=FALSE}
+plot1 <- ggplot(data, aes(x = as.factor(Gender), y = Calories)) +
+         geom_boxplot() +
+         scale_x_discrete(labels = c("0" = "Male", "1" = "Female")) +
+         labs(title = "Calories Distribution by Gender", x = "Gender", y = "Calories")
+
+plot2 <- ggplot(data, aes(x = Duration, y = Calories)) +
+         geom_point(alpha = 0.5) +
+         geom_smooth(method = "lm", color = "blue") +
+         labs(title = "Duration vs Calories", x = "Duration", y = "Calories")
+
+plot3 <- ggplot(data, aes(x = Body_Temp, y = Calories)) +
+         geom_point(alpha = 0.5) +
+         geom_smooth(method = "lm", color = "blue") +
+         labs(title = "Body Temperature vs Calories", x = "Body Temperature", y = "Calories")
+
+plot4 <- ggplot(data, aes(x = Heart_Rate, y = Calories)) +
+         geom_point(alpha = 0.5) +
+         geom_smooth(method = "lm", color = "blue") +
+         labs(title = "Heart Rate vs Calories", x = "Heart Rate", y = "Calories")
+
+grid.arrange(plot1, plot2, plot3, plot4, ncol = 2, nrow = 2)
+
+```
+
+# 2 Method and analysis
+
+## 2.1 Bayesian linear regression model
+
+### 2.1.1 method
+
+The approximation method used for inference is Bayesian inference through Markov Chain Monte Carlo (MCMC) sampling, specifically employing the No-U-Turn Sampler (NUTS), which is an extension of Hamiltonian Monte Carlo (HMC).
+
+```{r model-fitting, results='hide', message=FALSE, warning=FALSE, echo=FALSE}
+
+data_list <- list(
+  N = nrow(data),
+  y = data$Calories,
+  X = as.matrix(data[, c("Duration", "Heart_Rate", "Body_Temp")]),
+  K = 3  # Number of predictors
+)
+
+
+stan_model_code <- "
+data {
+  int<lower=0> N;  // number of observations
+  int<lower=0> K;  // number of predictors
+  vector[N] y;     // response variable
+  matrix[N, K] X;  // predictor matrix
+}
+parameters {
+  vector[K] beta;  // coefficients for predictors
+  real<lower=0> sigma;  // standard deviation
+}
+model {
+  y ~ normal(X * beta, sigma);
+  beta ~ normal(0, 10);
+  sigma ~ inv_gamma(0.01, 0.01);
+}
+"
+
+
+fit <- stan(model_code = stan_model_code, data = data_list, iter = 2000, chains = 4)
+print(summary(fit))
+```
+
+### 2.1.2 statistical analysis
+
+#### 2.1.2.1 estimators
+
+The model uses Bayesian estimation, which means the estimators are the posterior distributions of the parameters beta and sigma.
+
+#### 2.1.2.2 prior
+
+The prior for $\beta$ is a normal distribution with mean 0 and standard deviation 10: $$
+\beta \sim \mathcal{N}(0, 10)
+$$
+
+The prior for $\sigma$, the standard deviation of the normal distribution for the likelihood, is an inverse gamma distribution with both shape and scale parameters set to 0.01: $$
+\sigma \sim \text{Inv-Gamma}(0.01, 0.01)
+$$
+
+#### 2.1.2.3 loss function
+
+The loss function in the context of the Bayesian regression model is the negative log-likelihood of the data given the parameters.
+
+$$
+L(\beta, \sigma) = \sum_{i=1}^{N} \frac{1}{2\sigma^2} (y_i - X_i \beta)^2 + \frac{N}{2} \log(2\pi\sigma^2)
+$$
+
+In this formula,$L$ is the loss function.$\beta$ is the vector of regression coefficients.$\sigma$ is the standard deviation of the normal distribution.
+$y_i$ is the observed value of the response variable for the $i$-th observation.$X_i$ is the vector of predictor values for the $i$-th observation.$N$ is the total number of observations.
+
+#### 2.1.2.4 predictors
+
+The predictors are the variables Duration, Heart Rate, and Body Temperature, which are hypothesized to be associated with the response variable Calories.
+
+### 2.1.3 sensitive analysis
+
+
+# 3.result and conclusions
